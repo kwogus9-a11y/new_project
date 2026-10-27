@@ -1,0 +1,8 @@
+{
+  "name": "habit-review",
+  "version": "0.1.0",
+  "description": "습관 잔디 검증 도구: 코드 리뷰 스킬, 그 스킬을 쓰는 코드 리뷰 서브에이전트, git commit 전에 lint·build·test를 돌리는 훅",
+  "author": {
+    "name": "김재현"
+  }
+}

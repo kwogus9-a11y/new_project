@@ -1,0 +1,13 @@
+{
+  "name": "habit-tracker",
+  "owner": {
+    "name": "김재현"
+  },
+  "plugins": [
+    {
+      "name": "habit-review",
+      "source": "./plugins/habit-review",
+      "description": "습관 잔디 검증 도구: 코드 리뷰 스킬, 코드 리뷰 서브에이전트, 커밋 전 lint·build·test 훅"
+    }
+  ]
+}
