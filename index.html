@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>습관 잔디</title>
+<script>
+  // 저장된 테마를 첫 렌더링 전에 적용해서 화면이 깜빡이지 않게 한다
+  try {
+    const t = localStorage.getItem('habit-tracker:theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch {}
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --hover: #f0f2f5;
+    --text: #1f2328;
+    --muted: #656d76;
+    --border: #d0d7de;
+    --cell-empty: #ebedf0;
+    --primary: #1a7f37;
+    --primary-text: #ffffff;
+    --danger: #cf222e;
+    --warn-bg: #fff8c5;
+    --warn-text: #6b4f00;
+    --shadow: 0 1px 2px rgba(31, 35, 40, .06), 0 2px 8px rgba(31, 35, 40, .04);
+    --cell: clamp(14px, 5vw, 22px);
+    --gap: 3px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --surface: #161b22;
+      --hover: #21262d;
+      --text: #e6edf3;
+      --muted: #8d96a0;
+      --border: #30363d;
+      --cell-empty: #21262d;
+      --primary: #238636;
+      --danger: #f85149;
+      --warn-bg: #3b2e00;
+      --warn-text: #f2cc60;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1117;
+    --surface: #161b22;
+    --hover: #21262d;
+    --text: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --cell-empty: #21262d;
+    --primary: #238636;
+    --danger: #f85149;
+    --warn-bg: #3b2e00;
+    --warn-text: #f2cc60;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  }
+  button, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  .wrap { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  .actions { display: flex; gap: 6px; }
+  .today-label { color: var(--muted); font-size: 14px; margin: 4px 0 16px; }
+  .foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--primary); border-color: transparent; color: var(--primary-text); font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .icon-btn {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--hover); }
+
+  .banner { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 12px 0 0; }
+
+  #list { display: grid; gap: 12px; }
+  .add { width: 100%; margin-top: 12px; padding: 10px; }
+
+  .empty { text-align: center; padding: 40px 16px; border: 1.5px dashed var(--border); border-radius: 12px; color: var(--muted); }
+  .empty-icon { font-size: 40px; margin: 0; }
+  .empty p { margin: 8px 0 16px; }
+
+  /* 습관 카드 */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .card-emoji {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    font-size: 22px;
+    background: color-mix(in srgb, var(--habit) 15%, transparent);
+  }
+  .card-title { flex: 1; min-width: 0; }
+  .card-name { margin: 0; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-streak { margin: 0; font-size: 13px; color: var(--muted); }
+  .card-streak span { display: inline-block; }
+  .check-today {
+    flex: none;
+    border: 1.5px solid var(--habit);
+    background: transparent;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .check-today:hover { background: color-mix(in srgb, var(--habit) 10%, transparent); }
+  .check-today[aria-pressed="true"] { background: color-mix(in srgb, var(--habit) 24%, transparent); }
+
+  .menu { position: relative; flex: none; }
+  .menu summary { list-style: none; }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 10;
+    display: grid;
+    min-width: 96px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
+  }
+  .menu-pop button { text-align: left; border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+  .menu-pop button:hover { background: var(--hover); }
+  .menu-pop .danger { color: var(--danger); }
+
+  /* 히트맵: 7행(월~일) x 12열(주) */
+  .heatmap { display: grid; grid-template-columns: auto auto; column-gap: 6px; row-gap: 4px; justify-content: start; }
+  .months {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: repeat(12, var(--cell));
+    gap: var(--gap);
+    height: 14px;
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--muted);
+  }
+  .months span { white-space: nowrap; }
+  .days { grid-column: 1; grid-row: 2; display: grid; grid-template-rows: repeat(7, var(--cell)); gap: var(--gap); font-size: 10px; color: var(--muted); }
+  .days span { line-height: var(--cell); }
+  .grid { grid-column: 2; grid-row: 2; display: grid; grid-template-rows: repeat(7, var(--cell)); grid-auto-columns: var(--cell); grid-auto-flow: column; gap: var(--gap); }
+  .cell { width: var(--cell); height: var(--cell); padding: 0; border: 0; border-radius: 4px; background: var(--cell-empty); cursor: pointer; }
+  .cell:hover:not(:disabled) { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--habit) 70%, transparent); }
+  .cell.on { background: var(--habit); }
+  .cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
+  .cell:focus-visible { outline: 2px solid var(--habit); outline-offset: 2px; }
+  .cell:disabled { opacity: .35; cursor: default; }
+
+  /* 추가/수정 모달 */
+  dialog {
+    width: min(400px, calc(100vw - 32px));
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .25);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  dialog form { display: grid; gap: 16px; padding: 20px; }
+  dialog h2 { margin: 0; font-size: 18px; }
+  .field { display: grid; gap: 6px; }
+  .field-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .text-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .text-input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+  .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .emoji-opt { aspect-ratio: 1; padding: 0; font-size: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; }
+  .emoji-opt:hover { background: var(--hover); }
+  .emoji-opt[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+  .emoji-custom { width: 110px; }
+  .color-grid { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px; }
+  .swatch { position: relative; cursor: pointer; }
+  .swatch input { position: absolute; opacity: 0; pointer-events: none; }
+  .swatch span { display: block; width: 30px; height: 30px; border-radius: 50%; background: var(--c); }
+  .swatch input:checked + span { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+  .swatch input:focus-visible + span { outline: 2px dashed var(--text); outline-offset: 6px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🌱 습관 잔디</h1>
+    <div class="actions">
+      <button type="button" id="themeBtn" class="icon-btn"></button>
+      <button type="button" id="exportBtn" class="btn">내보내기</button>
+      <button type="button" id="importBtn" class="btn">가져오기</button>
+      <input type="file" id="importInput" accept="application/json,.json" hidden>
+    </div>
+  </header>
+  <p id="storageWarning" class="banner" role="status" hidden>
+    브라우저 저장소를 쓸 수 없어서 이 창을 닫으면 기록이 사라져요. 내보내기로 백업해 주세요.
+  </p>
+  <p id="todayLabel" class="today-label"></p>
+
+  <main id="list"></main>
+
+  <div id="empty" class="empty" hidden>
+    <p class="empty-icon">🌱</p>
+    <p>아직 습관이 없어요.<br>매일 하고 싶은 일을 하나 추가해 보세요.</p>
+    <button type="button" id="emptyAddBtn" class="btn primary">첫 습관 추가</button>
+  </div>
+  <button type="button" id="addBtn" class="btn add">+ 습관 추가</button>
+
+  <p class="foot">기록은 이 브라우저에만 저장돼요. 다른 기기로 옮길 때는 내보내기를 써 주세요.</p>
+</div>
+
+<dialog id="habitDialog" aria-labelledby="dialogTitle">
+  <form id="habitForm">
+    <h2 id="dialogTitle">새 습관</h2>
+    <label class="field">
+      <span class="field-label">이름</span>
+      <input id="nameInput" class="text-input" maxlength="30" required autocomplete="off" placeholder="예: 30분 걷기">
+    </label>
+    <div class="field">
+      <span class="field-label" id="emojiLabel">이모지</span>
+      <div id="emojiGrid" class="emoji-grid" role="group" aria-labelledby="emojiLabel"></div>
+      <input id="emojiInput" class="text-input emoji-custom" autocomplete="off" placeholder="직접 입력" aria-label="이모지 직접 입력">
+    </div>
+    <div class="field">
+      <span class="field-label" id="colorLabel">색상</span>
+      <div id="colorGrid" class="color-grid" role="radiogroup" aria-labelledby="colorLabel"></div>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="cancelBtn" class="btn">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<template id="cardTpl">
+  <article class="card">
+    <div class="card-head">
+      <div class="card-emoji" aria-hidden="true"></div>
+      <div class="card-title">
+        <h2 class="card-name"></h2>
+        <p class="card-streak"></p>
+      </div>
+      <button type="button" class="check-today"></button>
+      <details class="menu">
+        <summary class="icon-btn" aria-label="습관 메뉴">⋯</summary>
+        <div class="menu-pop">
+          <button type="button" data-action="edit">수정</button>
+          <button type="button" data-action="delete" class="danger">삭제</button>
+        </div>
+      </details>
+    </div>
+    <div class="heatmap">
+      <div class="months" aria-hidden="true"></div>
+      <div class="days" aria-hidden="true"><span>월</span><span></span><span>수</span><span></span><span>금</span><span></span><span></span></div>
+      <div class="grid" role="group"></div>
+    </div>
+  </article>
+</template>
+
+<script>
+  const WEEKS = 12;
+  const STORE_KEY = 'habit-tracker:v1';
+  const THEME_KEY = 'habit-tracker:theme';
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const WEEKDAYS = '일월화수목금토';
+  const DEFAULT_EMOJI = '✅';
+  const EMOJIS = ['✅', '🏃', '💪', '📚', '💧', '🧘', '🥗', '😴', '✍️', '🎸', '💊', '🧹'];
+  // 두 테마의 빈 칸 색과 모두 3:1 이상 대비가 나오는 색만 쓴다
+  const COLORS = [
+    { value: '#15913f', name: '초록' },
+    { value: '#3b82f6', name: '파랑' },
+    { value: '#8b5cf6', name: '보라' },
+    { value: '#ea580c', name: '주황' },
+    { value: '#db2777', name: '분홍' },
+    { value: '#0d9488', name: '청록' },
+  ];
+  const COLOR_VALUES = COLORS.map((c) => c.value);
+
+  // ---- 날짜 유틸: toISOString()은 UTC 기준이라 쓰지 않고 항상 로컬 날짜로 계산한다
+  function toKey(d) {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+  function parseKey(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function startOfWeekMonday(d) { return addDays(d, -((d.getDay() + 6) % 7)); }
+  function formatLabel(d) { return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`; }
+  function todayKey() { return toKey(new Date()); }
+  function isValidKey(key) { return DATE_RE.test(key) && toKey(parseKey(key)) === key; }
+
+  // ---- streak
+  function currentStreak(checks, today) {
+    let d = parseKey(today);
+    // 오늘 아직 체크하지 않았으면 어제까지의 연속 기록을 보여준다
+    if (!checks[today]) d = addDays(d, -1);
+    let n = 0;
+    while (checks[toKey(d)]) {
+      n++;
+      d = addDays(d, -1);
+    }
+    return n;
+  }
+  function bestStreak(checks) {
+    let best = 0, run = 0, prev = null;
+    for (const key of Object.keys(checks).sort()) {
+      run = prev && toKey(addDays(parseKey(prev), 1)) === key ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = key;
+    }
+    return best;
+  }
+
+  // ---- 데이터 검증과 저장소
+  function newId() {
+    return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+  function firstGrapheme(s) {
+    if (!s) return '';
+    if (window.Intl && Intl.Segmenter) {
+      const first = new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(s)[Symbol.iterator]().next();
+      return first.done ? '' : first.value.segment;
+    }
+    return Array.from(s)[0] || '';
+  }
+  // 저장된 데이터나 가져온 파일을 검사해서 정상 형태로 돌려준다. 형식이 틀리면 null
+  function normalize(data) {
+    if (!data || typeof data !== 'object' || !Array.isArray(data.habits)) return null;
+    const seen = new Set();
+    const out = [];
+    for (const h of data.habits) {
+      if (!h || typeof h !== 'object') return null;
+      if (typeof h.name !== 'string' || !h.name.trim()) return null;
+      if (!h.checks || typeof h.checks !== 'object' || Array.isArray(h.checks)) return null;
+      const checks = {};
+      for (const [key, done] of Object.entries(h.checks)) {
+        if (!isValidKey(key)) return null;
+        if (done === true) checks[key] = true;
+      }
+      let id = typeof h.id === 'string' && h.id ? h.id : newId();
+      if (seen.has(id)) id = newId();
+      seen.add(id);
+      out.push({
+        id,
+        name: h.name.trim().slice(0, 30),
+        emoji: (typeof h.emoji === 'string' && firstGrapheme(h.emoji.trim())) || DEFAULT_EMOJI,
+        color: COLOR_VALUES.includes(h.color) ? h.color : COLOR_VALUES[0],
+        createdAt: typeof h.createdAt === 'string' && isValidKey(h.createdAt) ? h.createdAt : todayKey(),
+        checks,
+      });
+    }
+    return out;
+  }
+  function storageAvailable() {
+    try {
+      const k = '__habit_test__';
+      localStorage.setItem(k, k);
+      localStorage.removeItem(k);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function load() {
+    if (!storageOk) return [];
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      return (raw && normalize(JSON.parse(raw))) || [];
+    } catch {
+      return [];
+    }
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ version: 1, habits }));
+      storageOk = true;
+    } catch {
+      storageOk = false;
+    }
+    warning.hidden = storageOk;
+  }
+  function loadTheme() {
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      return t === 'light' || t === 'dark' ? t : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveTheme(t) {
+    themePref = t;
+    try { localStorage.setItem(THEME_KEY, t); } catch {}
+  }
+
+  // ---- DOM
+  const $ = (id) => document.getElementById(id);
+  const list = $('list');
+  const empty = $('empty');
+  const addBtn = $('addBtn');
+  const warning = $('storageWarning');
+  const todayLabel = $('todayLabel');
+  const themeBtn = $('themeBtn');
+  const importInput = $('importInput');
+  const dialog = $('habitDialog');
+  const form = $('habitForm');
+  const nameInput = $('nameInput');
+  const emojiInput = $('emojiInput');
+  const emojiGrid = $('emojiGrid');
+  const colorGrid = $('colorGrid');
+  const cardTpl = $('cardTpl');
+  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+
+  let storageOk = storageAvailable();
+  let habits = load();
+  let themePref = loadTheme();
+  let today = todayKey();
+  let editingId = null;
+
+  // ---- 렌더링
+  function render() {
+    today = todayKey();
+    todayLabel.textContent = `오늘은 ${formatLabel(parseKey(today))}`;
+    list.replaceChildren(...habits.map(renderCard));
+    empty.hidden = habits.length > 0;
+    addBtn.hidden = habits.length === 0;
+    warning.hidden = storageOk;
+  }
+
+  function renderCard(habit) {
+    const card = cardTpl.content.firstElementChild.cloneNode(true);
+    card.dataset.id = habit.id;
+    card.style.setProperty('--habit', habit.color);
+    card.querySelector('.card-emoji').textContent = habit.emoji;
+    card.querySelector('.card-name').textContent = habit.name;
+
+    const cur = currentStreak(habit.checks, today);
+    const best = bestStreak(habit.checks);
+    const streak = card.querySelector('.card-streak');
+    if (best === 0) {
+      streak.textContent = '오늘부터 시작해 보세요';
+    } else {
+      // 좁은 화면에서 "최고 / 10일"처럼 끊기지 않도록 두 덩어리로 나눠 그 사이에서만 줄바꿈한다
+      const curPart = document.createElement('span');
+      curPart.textContent = `${cur > 0 ? `🔥 ${cur}일 연속` : '다시 시작해 볼까요?'} ·`;
+      const bestPart = document.createElement('span');
+      bestPart.textContent = `최고 ${best}일`;
+      streak.replaceChildren(curPart, ' ', bestPart);
+    }
+
+    const done = !!habit.checks[today];
+    const btn = card.querySelector('.check-today');
+    btn.textContent = done ? '✓ 완료' : '완료하기';
+    btn.setAttribute('aria-pressed', String(done));
+    btn.setAttribute('aria-label', `${habit.name} 오늘 완료`);
+    card.querySelector('.grid').setAttribute('aria-label', `${habit.name} 최근 ${WEEKS}주 기록`);
+
+    renderHeatmap(card, habit);
+    return card;
+  }
+
+  function renderHeatmap(card, habit) {
+    const start = addDays(startOfWeekMonday(parseKey(today)), -7 * (WEEKS - 1));
+
+    const months = card.querySelector('.months');
+    for (let w = 0; w < WEEKS; w++) {
+      const span = document.createElement('span');
+      const m = addDays(start, w * 7).getMonth();
+      // 첫 열은 다음 열도 같은 달일 때만 표시해서 라벨끼리 겹치지 않게 한다
+      const show = w === 0
+        ? addDays(start, 7).getMonth() === m
+        : addDays(start, (w - 1) * 7).getMonth() !== m;
+      if (show) span.textContent = `${m + 1}월`;
+      months.append(span);
+    }
+
+    const grid = card.querySelector('.grid');
+    for (let i = 0; i < WEEKS * 7; i++) {
+      const d = addDays(start, i);
+      const key = toKey(d);
+      const on = !!habit.checks[key];
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'cell';
+      cell.dataset.date = key;
+      cell.classList.toggle('on', on);
+      cell.classList.toggle('today', key === today);
+      cell.disabled = key > today;
+      cell.title = `${formatLabel(d)}${on ? ' · 완료' : ''}`;
+      cell.setAttribute('aria-label', formatLabel(d));
+      cell.setAttribute('aria-pressed', String(on));
+      grid.append(cell);
+    }
+  }
+
+  // ---- 액션
+  function toggle(card, habit, key, focusSelector) {
+    // 탭을 열어둔 채 날짜가 바뀌었으면 엉뚱한 날을 바꾸지 않도록 화면부터 새로 그린다
+    if (todayKey() !== today) return render();
+    if (key > today) return;
+    if (habit.checks[key]) delete habit.checks[key];
+    else habit.checks[key] = true;
+    save();
+    const next = renderCard(habit);
+    card.replaceWith(next);
+    next.querySelector(focusSelector)?.focus();
+  }
+
+  function deleteHabit(habit) {
+    if (!confirm(`'${habit.name}' 습관과 기록을 모두 삭제할까요?`)) return;
+    habits = habits.filter((h) => h.id !== habit.id);
+    save();
+    render();
+  }
+
+  function setEmoji(emoji) {
+    emojiInput.value = emoji;
+    syncEmojiPressed();
+  }
+  function syncEmojiPressed() {
+    const v = emojiInput.value.trim();
+    for (const b of emojiGrid.children) b.setAttribute('aria-pressed', String(b.dataset.emoji === v));
+  }
+
+  function openModal(habit) {
+    editingId = habit ? habit.id : null;
+    $('dialogTitle').textContent = habit ? '습관 수정' : '새 습관';
+    nameInput.value = habit ? habit.name : '';
+    setEmoji(habit ? habit.emoji : DEFAULT_EMOJI);
+    form.elements.color.value = habit ? habit.color : COLOR_VALUES[habits.length % COLOR_VALUES.length];
+    dialog.showModal();
+    nameInput.focus();
+  }
+
+  function submitModal(e) {
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.value = '';
+      nameInput.reportValidity();
+      return;
+    }
+    const emoji = firstGrapheme(emojiInput.value.trim()) || DEFAULT_EMOJI;
+    const color = form.elements.color.value || COLOR_VALUES[0];
+    const habit = editingId && habits.find((h) => h.id === editingId);
+    if (habit) Object.assign(habit, { name, emoji, color });
+    else habits.push({ id: newId(), name, emoji, color, createdAt: todayKey(), checks: {} });
+    save();
+    dialog.close();
+    render();
+  }
+
+  function exportJson() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), habits };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `habits-${todayKey()}.json`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function importJson(file) {
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      alert('JSON 파일을 읽을 수 없어요. 기존 데이터는 그대로 두었어요.');
+      return;
+    }
+    const next = normalize(data);
+    if (!next) {
+      alert('습관 잔디 백업 파일 형식이 아니에요. 기존 데이터는 그대로 두었어요.');
+      return;
+    }
+    if (!confirm(`습관 ${next.length}개를 가져와서 지금 데이터를 덮어쓸까요?`)) return;
+    habits = next;
+    save();
+    render();
+  }
+
+  // ---- 테마
+  function isDark() { return themePref ? themePref === 'dark' : darkQuery.matches; }
+  function applyTheme() {
+    if (themePref) document.documentElement.dataset.theme = themePref;
+    else delete document.documentElement.dataset.theme;
+    const dark = isDark();
+    const label = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+    themeBtn.textContent = dark ? '☀️' : '🌙';
+    themeBtn.title = label;
+    themeBtn.setAttribute('aria-label', label);
+  }
+
+  // ---- 이벤트 연결
+  for (const emoji of EMOJIS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'emoji-opt';
+    b.dataset.emoji = emoji;
+    b.textContent = emoji;
+    emojiGrid.append(b);
+  }
+  for (const c of COLORS) {
+    const label = document.createElement('label');
+    label.className = 'swatch';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'color';
+    input.value = c.value;
+    input.setAttribute('aria-label', c.name);
+    const dot = document.createElement('span');
+    dot.style.setProperty('--c', c.value);
+    label.append(input, dot);
+    colorGrid.append(label);
+  }
+
+  list.addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    const habit = card && habits.find((h) => h.id === card.dataset.id);
+    if (!habit) return;
+    const cell = e.target.closest('.cell');
+    if (cell) return toggle(card, habit, cell.dataset.date, `.cell[data-date="${cell.dataset.date}"]`);
+    if (e.target.closest('.check-today')) return toggle(card, habit, today, '.check-today');
+    const action = e.target.closest('[data-action]')?.dataset.action;
+    if (!action) return;
+    card.querySelector('.menu').open = false;
+    if (action === 'edit') openModal(habit);
+    else if (action === 'delete') deleteHabit(habit);
+  });
+  // 메뉴 바깥을 누르면 열린 메뉴를 닫는다
+  document.addEventListener('click', (e) => {
+    for (const menu of document.querySelectorAll('.menu[open]')) {
+      if (!menu.contains(e.target)) menu.open = false;
+    }
+  });
+
+  addBtn.addEventListener('click', () => openModal());
+  $('emptyAddBtn').addEventListener('click', () => openModal());
+  $('cancelBtn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+  form.addEventListener('submit', submitModal);
+  emojiGrid.addEventListener('click', (e) => {
+    const b = e.target.closest('.emoji-opt');
+    if (b) setEmoji(b.dataset.emoji);
+  });
+  emojiInput.addEventListener('input', syncEmojiPressed);
+
+  $('exportBtn').addEventListener('click', exportJson);
+  $('importBtn').addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', () => {
+    const file = importInput.files[0];
+    importInput.value = '';
+    if (file) importJson(file);
+  });
+
+  themeBtn.addEventListener('click', () => {
+    saveTheme(isDark() ? 'light' : 'dark');
+    applyTheme();
+  });
+  darkQuery.addEventListener('change', applyTheme);
+
+  // 자정이 지나면 "오늘"이 바뀌도록 다시 그린다
+  function refreshIfDayChanged() { if (todayKey() !== today) render(); }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshIfDayChanged(); });
+  window.addEventListener('focus', refreshIfDayChanged);
+  setInterval(refreshIfDayChanged, 60_000);
+
+  applyTheme();
+  render();
+</script>
+</body>
+</html>

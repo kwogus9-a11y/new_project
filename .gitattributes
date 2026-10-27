@@ -1,0 +1,2 @@
+# 훅 스크립트가 CRLF로 체크아웃되면 bash가 CR 문자 때문에 실패한다
+*.sh text eol=lf
